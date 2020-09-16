@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>传递事件参数</title>
+    <style type="text/css">
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+      }
+      #container {
+        width: 80%;
+        height: 70%;
+      }
+      * {
+        margin: 0px;
+        padding: 0px;
+      }
+      body,
+      button,
+      input,
+      select,
+      textarea {
+        font: 12px/16px Verdana, Helvetica, Arial, sans-serif;
+      }
+      p {
+        width: 603px;
+        padding-top: 3px;
+        overflow: hidden;
+      }
+    </style>
+    <script
+      charset="utf-8"
+      src="https://map.qq.com/api/js?v=2.exp&key=D56BZ-YTB3P-ESFD3-LBI6U-DX62H-A2BTX"
+    ></script>
+    <script>
+      var init = function () {
+        var map = new qq.maps.Map(document.getElementById("container"), {
+          center: new qq.maps.LatLng(23.412079, 116.634958),
+          zoom: 17,
+        });
+        //绑定单击事件添加参数
+        qq.maps.event.addListener(map, "click", function (event) {
+          let pl = {
+            address: vm.currentAddress,
+            lat: event.latLng.getLat(),
+            lng: event.latLng.getLng(),
+          };
+          vm.places.push(pl);
+          let point = document.createElement("h3");
+          point.innerText = pl.address + "|" + pl.lat + "|" + pl.lng;
+          document.getElementById("show").appendChild(point);
+        });
+      };
+    </script>
+    <script
+      crossorigin="anonymous"
+      integrity="sha384-OZmxTjkv7EQo5XDMPAmIkkvywVeXw59YyYh6zq8UKfkbor13jS+5p8qMTBSA1q+F"
+      src="https://lib.baomitu.com/vue/2.6.11/vue.min.js"
+    ></script>
+  </head>
+  <body onload="init()">
+    <div id="container"></div>
+    <div id="show">
+      <input type="text" v-model.lazy="currentAddress" />
+    </div>
+  </body>
+  <script>
+    const vm = new Vue({
+      el: "#show",
+      data: {
+        places: [],
+        currentAddress: "未指定",
+      },
+    });
+  </script>
+</html>
