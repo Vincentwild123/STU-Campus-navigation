@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="shortcut icon" href="images/favicon.icon" type="image/x-icon" />
+    <link rel="stylesheet" href="stylesheets/style.css" />
+    <title>汕大牧童</title>
+  </head>
+
+  <body>
+    <!-- 地图挂载点 -->
+    <div id="mapContainer"></div>
+    <!-- Vue实例挂载点 -->
+    <div id="labelContainer"></div>
+  </body>
+  <script
+    defer
+    charset="utf-8"
+    src="https://map.qq.com/api/gljs?v=1.exp&key=D56BZ-YTB3P-ESFD3-LBI6U-DX62H-A2BTX"
+  ></script>
+  <script
+    defer
+    src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"
+  ></script>
+  <script
+    defer
+    crossorigin="anonymous"
+    integrity="sha384-OZmxTjkv7EQo5XDMPAmIkkvywVeXw59YyYh6zq8UKfkbor13jS+5p8qMTBSA1q+F"
+    src="https://lib.baomitu.com/vue/2.6.11/vue.min.js"
+  ></script>
+  <script id="template" type="x-template">
+    <div>
+      <div class="start">
+        <div class="startEndlabel">起点</div>
+        <input v-model='fromInput' readonly/>
+      </div>
+      <div class="end">
+        <div class="startEndlabel">终点</div>
+        <input v-model='toInput' readonly/>
+      </div>
+      <div id="button">
+        <button class="button" @click="query">查询</button>
+        <button class="button" @click="reset">重置</button>
+      </div>
+      <div class="label">
+        <template v-for="(PointCFIndex,index) in PointsCF" :key="index">
+          <div>
+            <label class="marker" for="#">{{PointsCFName[index]}}</label>
+            <div class="labels">
+              <label
+                v-for="idx in PointCFIndex"
+                @click="setFromTo(idx+1,Points[idx].address,Points[idx].lat,Points[idx].lng)"
+                for="#"
+                :key="idx"
+                >{{Points.length?Points[idx].address:""}}</label
+              >
+            </div>
+          </div></template
+        >
+      </div>
+    </div>
+  </script>
+  <script>
+    window.onload = function () {
+      setTimeout(initMap, 0);
+      var map;
+      function initMap() {
+        //初始化地图
+        map = new TMap.Map("mapContainer", {
+          center: new TMap.LatLng(23.412079, 116.634958), //地图显示中心点23.410770,116.638155
+          zoom: 16, //缩放级别
+          mapStyleId: "style2",
+        });
+      }
+      const vm = new Vue({
+        el: "#labelContainer",
+        template: "#template",
+        data: {
+          fromInput: "",
+          toInput: "",
+          Points: [],
+          polylineLayer: null,
+          marker: null,
+          plID: 0,
+          LastplID: 0,
+          LastmkID: 0,
+          mkID: 0,
+          PointsCF: [
+            [0, 1, 14, 16, 17],
+            [4, 5, 6, 7, 8, 15],
+            [9, 10, 11, 12, 13, 23, 27],
+            [2, 3, 18, 19, 20, 21, 22, 24, 25, 26, 28, 29, 30],
+          ],
+          PointsCFName: ["地理地标", "教学楼", "系楼", "其他"],
+          FromToObj: {
+            fromPoints: [],
+            toPoints: [],
+          },
+        },
+        mounted() {
+          //render the label of point
+          let that = this;
+          axios(`http://localhost:3000/getPointsData`)
+            .then((res) => {
+              that.Points = res.data;
+            })
+            .catch((err) => {
+              console.log(err);
+              alert("提供查询服务服务器未开启");
+            });
+        },
+        methods: {
+          query() {
+            let Objtostring = JSON.stringify(this.$data.FromToObj);
+            axios(`http://localhost:3000/api?fromToObj=${Objtostring}`)
+              .then((res) => {
+                setMarker();
+                res.data.forEach((route) => {
+                  if (route && route.routes) cb(route.routes);
+                });
+                vm.LastplID = vm.plID;
+              })
+              .catch((err) => console.log(err));
+          },
+          setFromTo(index, address, lat, lng) {
+            let point = Object.create(null);
+            point.latlng = lat + "," + lng;
+            point.address = address;
+            point.index = index;
+            if (this.fromInput) {
+              this.FromToObj.toPoints.push(point);
+              this.toInput += address + " ";
+            } else {
+              this.FromToObj.fromPoints.push(point);
+              this.fromInput += address;
+            }
+          },
+          reset() {
+            //将内部数据置空
+            this.FromToObj.fromPoints = [];
+            this.FromToObj.toPoints = [];
+            //将input框置空
+            this.fromInput = this.toInput = "";
+            if (this.LastmkID) {
+              this.mkID = 0;
+              this.marker.setGeometries([]);
+            }
+            if (this.LastplID) {
+              this.plID = 0;
+              for (let i = 1; i <= this.LastplID; i++) {
+                this.polylineLayer.remove("" + i);
+              }
+              this.LastplID = 0;
+            }
+          },
+        },
+      });
+      let from, to;
+      //起始终点标记
+      function setMarker() {
+        //标记起终点marker
+        let startPoint = vm.FromToObj.fromPoints[0];
+        let endPoints = vm.FromToObj.toPoints;
+        let startlatlng = startPoint.latlng;
+        let endlatlng = [];
+        endPoints.forEach((p) => {
+          endlatlng.push(p.latlng);
+        });
+        if (!vm.marker) {
+          vm.marker = new TMap.MultiMarker({
+            map: map,
+            styles: {
+              start: new TMap.MarkerStyle({
+                width: 25,
+                height: 35,
+                anchor: { x: 16, y: 32 },
+                src:
+                  "https://mapapi.qq.com/web/lbs/javascriptGL/demo/img/start.png",
+              }),
+              end: new TMap.MarkerStyle({
+                width: 25,
+                height: 35,
+                anchor: { x: 16, y: 32 },
+                src:
+                  "https://mapapi.qq.com/web/lbs/javascriptGL/demo/img/end.png",
+              }),
+            },
+          });
+        }
+        vm.marker.add([
+          {
+            id: ++vm.mkID + "",
+            styleId: "start",
+            position: new TMap.LatLng(
+              startlatlng.split(",")[0],
+              startlatlng.split(",")[1]
+            ),
+          },
+        ]);
+        endlatlng.forEach((latlng) => {
+          vm.marker.add([
+            {
+              id: ++vm.mkID + "",
+              styleId: "end",
+              position: new TMap.LatLng(
+                latlng.split(",")[0],
+                latlng.split(",")[1]
+              ),
+            },
+          ]);
+        });
+        vm.LastmkID = vm.mkID;
+      }
+
+      //定义请求回调函数，在此拿到计算得到的路线，并进行绘制
+      function cb(ret) {
+        var coords = ret[0].polyline;
+        pl = [];
+        //坐标解压（返回的点串坐标，通过前向差分进行压缩）
+        var kr = 1000000;
+        for (var i = 2; i < coords.length; i++) {
+          coords[i] = Number(coords[i - 2]) + Number(coords[i]) / kr;
+        }
+        //将解压后的坐标放入点串数组pl中
+        for (var i = 0; i < coords.length; i += 2) {
+          pl.push(new TMap.LatLng(coords[i], coords[i + 1]));
+        }
+        //将pl转换为lnglat数组
+        let newPl = [];
+        pl.forEach(function (item) {
+          let lat = item.lat;
+          let lng = item.lng;
+          let point = new TMap.LatLng(lat, lng);
+          newPl.push(point);
+        });
+        display_polyline(newPl); //显示路线
+      }
+      //颜色对象
+      function RandomColor() {
+        this.r = Math.floor(Math.random() * 255);
+        this.g = Math.floor(Math.random() * 255);
+        this.b = Math.floor(Math.random() * 255);
+        this.color = "rgb(" + this.r + "," + this.g + "," + this.b + ")";
+      }
+      function display_polyline(pl) {
+        //创建 MultiPolyline显示折线
+        vm.plID++;
+        if (!vm.polylineLayer) {
+          vm.polylineLayer = new TMap.MultiPolyline({
+            id: "vm_polyline", //图层唯一标识
+            map: map, //绘制到目标地图
+            //折线样式定义
+            styles: {
+              style_random: new TMap.PolylineStyle({
+                color: "#f00", //线填充色
+                width: 6, //折线宽度
+                borderWidth: 1, //边线宽度
+                borderColor: "#FFF", //边线颜色
+                lineCap: "round", //线端头方式
+                showArrow: true,
+                arrowOptions: {
+                  height: 6,
+                  space: 100,
+                },
+              }),
+            },
+            //折线数据定义
+            geometries: [
+              {
+                id: "" + vm.plID, //折线唯一标识，删除时使用
+                styleId: "style_random", //绑定样式名
+                paths: pl,
+              },
+            ],
+          });
+        } else
+          vm.polylineLayer.add({
+            id: "" + vm.plID, //折线唯一标识，删除时使用
+            styleId: "style_random", //绑定样式名
+            paths: pl,
+          });
+      }
+    };
+  </script>
+</html>
